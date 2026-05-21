@@ -1,0 +1,1 @@
+viewer.style.filter = 'grayscale(0.5) invert(0.9)';
