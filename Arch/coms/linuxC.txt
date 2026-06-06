@@ -1,0 +1,248 @@
+https://onedrive.live.com/?id=root&cid=E8E0594F9C61E463&qt=mru
+
+/usr/share/kbd/consolefonts/
+setfont ter-132b
+cat /sys/firmware/efi/fw_platform_size             64
+iwctl
+systemd-modules-load(8) 
+timedatectl
+inxi
+efivar -l run uefi
+gdisk /dev/sdb - wiping drive
+GPT fdisk (gdisk, cgdisk, cfdisk or sgdisk)  - for partitioning, 8200 Linux swap 16 GiB, 8300 root 40GiB
+
+----------------- packages -------------------
+
+pacman -Syy reflector
+reflector -c Ukraine -a 6 --sort rate --save /etc/pacman.d/mirrorlist
+
+-------------- install ---------------
+
+pacstrap  -K /mnt base linux linux-firmware sof-firmware base-devel efibootmgr nano dhcpcd mesa intel-ucode intel-media-driver
+
+------------------ gstab -------------
+
+genfstab -U -p /mnt >> /mnt/etc/fstab
+nano /mnt/etc/fstab
+
+---------- timedatectl --------
+
+ln -sf /usr/share/zoneinfo/Europe/Kyiv  etc/localtime
+timedatectl set-timezone /Europe/Kyiv
+hwclock --systohc
+
+system-timesyncd 1:25 PM 11/20/2024
+timedatectl
+systemd-timesyncd
+timedatectl set-ntp true
+start/enable systemd-timesyncd.service    in chroot
+
+sudo pacman -S nano bash-completion
+-----------------------------------
+nano /etc/locale.gen
+locale-gen
+-------------------------------------
+echo LANG=en_US.UTF-8 /etc/locale.conf
+nano /etc/vconsole.conf  - KEYMAP=en_US.UTF-8
+export ----- sudo user -------------
+echo Daphie > /etc/hostname
+
+systemctl enable fstrim.timer
+nano /etc/pacman.conf           ----> multilib uncheck
+passwd
+useradd -m -g users -G wheel,storage,power -s /bin/bash daphie
+passwd daphie
+EDITOR=nano visudo ---------> %wheel ALL=(ALL:ALL) ALL        uncheck and at the bottom Defaults rootpw
+
+---------- boot ---------------
+sudo -i //preveledges
+fdisk -l
+efibootmgr -v
+mkinitcpio -P
+
+mount -t efivarfs efivarfs /sys/firmware/efi/efivars/ 
+ls /sys/firmware/efi/efivars/
+
+---------- grub --------------
+grub-install /dev/sdb --target=x86_64-efi --bootloader-id=grub-uefi --recheck
+cp /usr/share/locale/en\@quot\LC_MESSAGES/grub/mo /boot/grub/locale/en.mo
+
+grub-mkconfig -o /boot/efi/grub/grub.cfg
+
+-------------- systemd -------------
+bootctl install
+nano /boot/loader/entries/genna.conf
+                   -*-
+title genna
+Linux /vmlinuz-linux
+initrd /initramfs-linux.img
+           -*-
+- shows UUID -
+blkid /dev/sdb3 
+(lsblk -dno PARTUUID /dev/sda1)
+$(blkid -s PARTUUID -o value /dev/sdb3)
+
+esp/EFI/arch/initramfs-linux.img      //// initrd==/EFI/
+ip link
+----------*******---------------
+
+efibootmgr -c -d /dev/sdb -p 1 -L "Arch2" -l '\vmlinuz-linux' -u 'initrd=\initramfs-linux.img root=UUID=$(blkid -s UUID -o value /dev/sdb3) rw'
+
+----------- network ------------
+
+echo genna e/hostname
+nano /etc/hostname ------genna
+
+127.0.0.1    localhost
+::1        localhost
+127.0.0.1    genna.localdomain  For a system with a permanent IP address, replace 127.0.1.1 with that permanent IP addres
+
+systemctl enable NetworkManager
+
+
+
+sudu pacman -S dhcpcd
+#sudo sysctl enable dhcdcp@wlan1.service
+ip link
+wpa_passphrase "SSID" "password" | sudo tee /etc/wpa_supplicant/wpa_supplicant.conf
+sudo wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf
+
+sudo pacman -S networkmanager
+sudo systemctl enable networkmanager.service
+-------------- nvidia ---------------
+sudo pacman -Syu
+sudo pacman -S linux-headers
+sudo pacman -S nvidia nvidia-settings libglvnd nvidia-utils opencl-nvidia lib32-libglvnd lib32-nvidia-utils lib32-opencl-nvidia nvidia-settings cuda
+sudo pacman -S nvidia-open-dkms nvidia-settings libxnvctrl lib32-nvidia-utils libvdpau opencl-nvidia lib32-opencl-nvidia egl-wayland cuda
+nvidia-smi
+
+mkinitcpio -p Linux
+
+FOR note
+
+mesa xf86-video-intel
+/etc/mkinitcpio.conf----------MODULES=(i915)
+
+sudo pacman -S i3-wm i3status dmenu
+
+--------------------------------
+sudo pacman -S archlinux-keyring
+
+sudo pacman-key --init
+sudo pacman-key --populate archlinux
+
+
+
+sudo pacman -S xorg-server xorg-xinit xorg-xrandr xorg-xsetroot ttf-lib
+sudo pacman -S xf86-input-libinput
+i3-wm
+git
+git clone https://git.suckless.org/dwm
+cd dwm
+sudo make clean install
+nano sd.h
+etc/X11/xinit/xinitrc.d replace 5 lines from end  - exec dwm
+
+-----------secure boot-------------
+pacman sbctl
+sudo -i
+sbctl status
+sbctl create-keys
+sbctl enroll-keys -m
+sbctl sign -s -o /usr/lib/system/boot/.../systemd-bootx64.efi.signed /usr/lib/system/boot/efi.../systemd-bootx64.efi
+cat /etc/mkinitcpio.d/Linux.preset
+sbctl sign -s "default_uki path"
+bootctl install
+
+-------------- firewall ---------------
+sudo pacman -S ufw
+sudo pacman -S firewalld
+sudo pacman -S iptables
+sudo pacman -S nftables
+
+sudo systemctl enable ufw
+sudo systemctl start ufw
+
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+sudo ufw enable
+---------------------------------------
+
+sudo nano /etc/mkinitcpio.conf
+
+MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)
+
+sudo nano /boot/loader/entries/genna.conf
+
+rw nvidia_drm.modesset=1
+
+mkdir /etc/pacman.d/hooks
+
+sudo nano /etc/pacman.d/hooks/nvidia.hook
+
+[Trigger]
+Operation=Install
+Operation=Upgrade
+Operation=Remove
+Type=Package
+Target=nvidia
+
+[Action]
+Depends=mkinitcpio
+When=PostTransaction
+Exec=/usr/bin/mkinitcpio -P
+
+nvidia-xconfig
+nvidia-settings --load-config-only
+
+To verify that DRM is actually enabled, execute the following: 
+cat /sys/module/nvidia_drm/parameters/modeset   
+
+---------crypt---------------
+
+cryptsetup luksFormat /dev/sdb3
+
+cryptsetup open --type luks /dev/sdb3 "name"
+passphrase---
+pvcreate /dev/mapper/"name"
+vgcreate volgroup0 /dev/mapper/"name"
+lvcerate -L 30GB volgroup0 -n lv_root - created volume
+lvcreate -L 250GB volgroup0 -n lv_home
+vgdisplay
+lvdisplay
+modprobe dm_mod
+vgscan 
+vgchange -ay
+mkfs.ext4 /dev/volgroup0/lv_root
+mount /dev/volgrroup0/lv_root /mnt
+mkdir /mnt/boot
+mount /dev/sdb3 /mnt/boot
+mkdir /mnt/home
+mount /dev/volgropu0/lv_home /mnt/home
+
+mkinitcpio/conf ----HOOKS=(lvm2 filesystems)
+
+-------------- unmount & reboot -----------------
+
+cd [path_or_directory]
+ls [options] [directory_or_path] -R -a(hidden)
+pwd [options] -L -P
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

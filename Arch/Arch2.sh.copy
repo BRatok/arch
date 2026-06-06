@@ -1,0 +1,382 @@
+#!/bin/bash
+
+# logs
+LOGFILE="/root/ar/inst.log"
+if [ -f $LOGFILE ]; then
+	echo "deleting existing log"
+	rm -rf $LOGFILE
+fi
+
+exec > >(tee -a "$LOGFILE") 2>&1
+echo " Installation started $(date). logs in $LOGFILE"
+
+# connecting to internet
+#source iw.sh 
+
+echo "unmounting and unswaping"
+
+umount /mnt/boot
+umount /mnt
+swapoff -a
+
+# 1. Ask for root password
+
+echo "Enter root password:"
+read -s root_password
+echo "Confirm root password:"
+read -s root_password_confirm
+
+while [[ "$root_password" != "$root_password_confirm" ]]; do
+    echo "Passwords do not match. Please try again."
+    echo "Enter root password:"
+    read -s root_password
+    echo "Confirm root password:"
+    read -s root_password_confirm
+done
+
+# 2. Ask for user details
+echo "Enter the username for the new user:"
+read username
+
+echo "Enter password for user $username:"
+read -s user_password
+echo "Confirm password for user $username:"
+read -s user_password_confirm
+
+while [[ "$user_password" != "$user_password_confirm" ]]; do
+    echo "Passwords do not match. Please try again."
+    echo "Enter password for user $username:"
+    read -s user_password
+    echo "Confirm password for user $username:"
+    read -s user_password_confirm
+done
+# 3. Scan for available disks
+echo "Scanning available disks..."
+lsblk
+
+# 4. Ask for disk address
+echo "Enter the disk to install Arch Linux (e.g., nvme0n1 or sda):"
+
+read disk_input
+disk="/dev/${disk_input}"
+read -p "Are you sure you want to format ${disk}? (y/N): " confirm
+[ $confirm != "y" ] && echo "Cancelled." && exit 1
+
+# 5. Ask for swap size
+
+echo "Do you want to create swap? (y/n)"
+
+read swap_choice
+
+if [[ "$swap_choice" == "y" ]]; then
+    echo "Enter swap size in GB:"
+    read swap_size
+fi
+
+if [[ $disk == *"nvme"* ]]; then
+  efi="${disk}p1"
+  	if [[ $swap_choice == "y" ]]; then
+    		swap="${disk}p2"
+    		root="${disk}p3"
+	else
+    		root="${disk}p2"
+	fi
+else	
+  efi="${disk}1"
+       	if [[ $swap_choice == "y" ]]; then
+    		swap="${disk}2"
+    		root="${disk}3"
+  	else
+    		root="${disk}2"
+  	fi
+fi
+
+# 6. Check for EFI and mount efivarfs if needed
+if ! mount | grep -q /sys/firmware/efi/efivars; then
+    echo "Mounting efivarfs..."
+    mount -t efivarfs efivarfs /sys/firmware/efi/efivars
+fi
+
+# 7. Partitioning the disk
+echo "Partitioning the disk using fdisk..."
+
+# Calculate end sectors based on swap choice
+
+if [[ $swap_choice == "y" ]]; then
+	echo "making swap partition"
+    	fdisk "$disk" <<EOF
+	g
+	n
+	1
+	
+	+512M
+	t
+	1
+	n
+	2
+	
+	+${swap_size}G
+	t
+	2
+	19
+	n
+	3
+	
+	
+	w	
+EOF
+else
+	echo "no swap partition made"
+    	fdisk "$disk" <<EOF
+	g
+	n
+	1
+	
+	+512M
+	t
+	1
+	1
+	n
+	2
+	
+	
+	w
+EOF
+fi
+
+# 8. Format the partitions
+echo "Formatting partitions..."
+
+# EFI partition (1GB)
+mkfs.fat -F32 ${efi}
+
+# Swap partition (if needed)
+if [[ $swap_choice == "y" ]]; then
+	echo "making swap fs"
+	mkswap ${swap}
+	swapon ${swap}
+fi
+
+# Btrfs partition (or ext4 if preferred)
+
+mkfs.btrfs -f ${root}
+
+sleep 1
+# 9. Mount partitions
+echo "Mounting partitions..."
+
+mount ${root} /mnt
+mkdir /mnt/boot
+mount ${efi} /mnt/boot
+
+
+# password, partitions, mount
+#source begin.sh 
+
+#echo "archlinux-keyring making"
+pacman -Sy --noconfirm archlinux-keyring
+#pacman-key --refresh-keys
+pacman-key --init
+pacman-key --populate archlinux
+
+# 10. Install base system with pacstrap
+echo "Installing base system..."
+pacstrap -K /mnt --noconfirm base linux linux-firmware linux-headers sof-firmware base-devel bash bash-completion
+
+
+
+echo "installing bash"
+
+sleep 0.5
+
+echo "[ -r /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion" >> /mnt/etc/bash.bashrc
+	  
+	  
+sleep 0.5
+ 
+#  Generate fstab
+echo "Generating fstab..."
+genfstab -U /mnt >> /mnt/etc/fstab
+
+
+echo "...........end pacstrap........."
+
+#  packstrap
+#source packstrap.sh
+
+
+
+
+
+# 12. Chroot into the new system
+echo "Chrooting into the new system..."
+arch-chroot /mnt /bin/bash <<EOF
+
+
+pacman -S --noconfirm archlinux-keyring
+
+pacman-key --init --noconfirm 
+pacman-key --populate archlinux --noconfirm 
+
+pacman -Syu --noconfirm 
+
+pacman -S --noconfirm efibootmgr nano networkmanager nvidia-utils nvidia-settings amd-ucode ntfs-3g \
+tzdata greetd hyprland \
+ hyprsunset rofi alacritty btrfs-progs sudo archlinux-keyring xorg-server xorg-xinit xorg-xrandr xorg-xsetroot\
+ xf86-input-libinput \
+ ufw dolphin git pipewire pipewire-pulse htop reflector lsof maim wpa_supplicant firefox keepass ttf-fira-code \
+ terminus-font nnn pavucontrol\
+ mpv nano-syntax-highlighting hyprpaper
+
+
+# Set timezone
+ln -sf /usr/share/zoneinfo/Europe/Kyiv  etc/localtime
+timedatectl set-timezone Europe/Kyiv
+timedatectl set-ntp true
+
+# Set locales
+echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+echo "ru_RU.UTF-8 UTF-8" >> /etc/locale.gen
+
+locale-gen
+
+# Set keyboard layout and font
+echo "KEYMAP=us" > /etc/vconsole.conf
+echo "FONT=ter-v32b" >> /etc/vconsole.conf
+
+# Set hostname
+echo "$username" > /etc/hostname
+
+# Set hosts file
+echo "127.0.0.1 localhost" > /etc/hosts
+echo "::1 localhost" >> /etc/hosts
+echo "127.0.1.1 $username.localdomain $username" >> /etc/hosts
+
+# Set root password
+echo "root:$root_password" | chpasswd
+
+# Add user and set password
+useradd -m -G wheel,storage,power,audio,video,input,render,uucp -s /bin/bash $username
+echo "$username:$user_password" | chpasswd
+
+# Grant wheel group sudo access
+echo "%wheel ALL=(ALL:ALL) ALL" >> /etc/sudoers
+
+# Enable multilib repository for 32-bit support
+echo "[multilib]" >> /etc/pacman.conf
+echo "Include = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+
+
+
+# Enable NetworkManager
+systemctl enable NetworkManager.service
+
+# Install bootloader (systemd-boot)
+bootctl --path=/boot install
+
+
+
+# set larger text size in tty1 loggin part
+echo "setfont ter-v32b" >> ~/.bash_profile
+
+# create include nanorc file
+echo 'include "/usr/share/nano-syntax-highlighting/*.nanorc"' >> ~/.nanorc
+
+# Create boot entry with efibootmgr
+
+for entry in $(efibootmgr | grep "UEFI OS" | awk '{print $1}'); do
+	bootnum=${entry#Boot}
+	bootnum=${bootnum%\*}
+	if [ -z "$bootnum" ]; then
+    		echo "Error: 'UEFI OS' boot entry not found!"
+    		exit 1
+	fi
+
+
+	echo "Boot number: $bootnum"
+	efibootmgr -b $bootnum -B
+  sleep 1
+	break
+done
+
+uuid=$(blkid -s UUID -o value $root)
+
+efibootmgr -c -d $disk -p 1 -L 'ArchLinux' -l '\vmlinuz-linux' -u "initrd=\initramfs-linux.img root=UUID=$uuid rw"
+sleep 1
+
+
+# ----------------BOOT 'Arch Linux'
+for entry in $(efibootmgr | grep "ArchLinux" | awk '{print $1}'); do
+	bootnum=${entry#Boot}
+	bootnum=${bootnum%\*}
+	if [ -z "$bootnum" ]; then
+    		echo "Error: 'Arch Linux' boot entry not found!"
+    		exit 1
+	fi
+
+
+	echo "Boot number: $bootnum"
+	efibootmgr -n $bootnum
+  sleep 1
+	break
+done
+
+export GTK_THEME=Adwaita:dark
+export GTK2_RC_FILES=/usr/share/themes/Adwaita-dark/gtk-2.0/gtkrc
+export QT_STYLE_OVERRIDE=Adwaita-Dark
+
+EOF
+sleep 1
+
+# Copy postInstall script
+cp post_inst.sh /mnt/usr/local/bin/
+
+chmod +x /mnt/usr/local/bin/post_inst.sh
+
+cp postinstall.service /mnt/etc/systemd/system/
+
+arch-chroot /mnt systemctl enable postinstall.service
+
+# Copy wallpaper folders
+cp -r wallw /mnt/home/$username/Desktop 2>/dev/null || true
+sleep 1
+
+cp -r wallv /mnt/home/$username/Desktop 2>/dev/null || true
+sleep 1
+
+# Copy dotfiles
+cp -r coms /mnt/home/$username/ 2>/dev/null || true
+
+# Copy logs
+cp /root/ar/inst.log /mnt
+
+sleep 1
+
+
+# Copy custom scripts to /usr/local/bin
+#cp -r bin/* /mnt/usr/local/bin/ 2>/dev/null || true
+
+#chmod +x /mnt/usr/local/bin/* 2>/dev/null || true
+chmod +x /.config/* 2>/dev/null || true
+sudo chown -R $username:$username /home/$username/.config
+chmod 700 /home/$username/.config
+
+
+
+echo "Set Arch Linux as the default boot entry (Boot$BOOTNUM)."
+
+# 13. Reboot
+echo "Rebooting into your new system..."
+
+umount -R /mnt
+swapoff -a
+#reboot
+
+# chroot, user, network, boot entry
+#source chroot.sh
+
+
+# post install script 
+#source post_inst.sh
+
+# end

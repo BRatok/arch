@@ -1,0 +1,12 @@
+wallpaper {
+    monitor = "DP-1"
+path = "~/walls/clouds-4215608.jpg
+ 
+    fit_mode = cover
+}
+
+wallpaper {
+    monitor = "HDMI-A-1"
+    path = ~/walls3/*
+    fit_mode = cover
+}

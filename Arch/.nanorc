@@ -1,0 +1,9 @@
+unset linenumbers
+set positionlog
+set tabsize 4
+set tabstospaces
+#set title
+#set nowrap
+set nohelp
+set minibar
+set numbercolor brightblue,black

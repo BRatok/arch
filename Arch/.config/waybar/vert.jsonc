@@ -1,0 +1,101 @@
+{
+    "layer": "top",
+    "position": "right",/*"bottom",*/
+    "output": ["HDMI-A-1"],
+    "width": 104,        
+    /*"height":34  */
+    "spacing": 0,
+	
+    "modules-center": [
+
+	 "hyprland/window",
+	      
+	],
+
+    "modules-left": [
+	"hyprland/workspaces"
+
+	],
+    
+    "modules-right": [
+         /*"hyprland/window",*/	 
+	 /*"hyprland/workspaces",*/
+         
+	"tray",
+	"custom/launcher",
+	"custom/power",
+
+	 "network",
+	 "pulseaudio", 
+
+         "clock"
+
+
+	],
+
+    "hyprland/workspaces": {
+        
+	"on-click": "none",
+	"disable-scroll": true,
+        "all-outputs": true,
+	"format": "{name}",
+	"rotate": 0
+    },
+
+    "hyprland/window": {
+        "format": "{}",
+        "max-length": 50,
+        "rotate": 90
+	
+   },
+
+    "clock": {
+        "format": " {:%H %M\n%b %d}",
+        "rotate": 0,
+
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+
+    "network": {
+        "format-wifi": " ",
+        "format-ethernet": "wire",
+        "format-disconnected": " ",
+        "rotate": 0
+    },
+
+    "pulseaudio": {
+    	"format": "{volume}",
+    	"format-bluetooth": "{volume}",
+    	"format-muted": "",
+    	
+
+    	"scroll-step": 1,
+    	"on-click": "pavucontrol",
+    	"ignored-sinks": ["Easy Effects Sink"]
+    },
+
+    "custom/launcher": {
+        "format": " " ,  //  "" Change to your preferred icon, e.g., " {}" for spacing
+        "on-click": "rofi -show drun -show-icons",
+        "tooltip": false
+    },
+   
+    "custom/power": {
+      	"format": "x" ,// "⏻"
+    	"tooltip": false,
+    	"menu": "on-click",
+    	"menu-file": "~/.config/waybar/power_menu.xml",
+    	"menu-actions": {
+	 "nightlight": "~/.config/scripts/nightLight.sh > /dev/null 2>&1 & disown",
+       	 "nightlightoff": "~/.config/scripts/nightLightoff.sh",
+
+       	 "shutdown": "systemctl poweroff",
+       	 "reboot": "systemctl reboot",
+         "logout": "hyprctl dispatch exit"
+   	 }
+    },
+
+    "tray": {
+        "spacing": 10
+    }
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run post-install script once
+After=NetworkManager.service
+Wants=NetworkManager.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/postin.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
